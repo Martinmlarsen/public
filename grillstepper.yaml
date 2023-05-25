@@ -1,0 +1,111 @@
+esphome:
+  name: grillstepper
+  friendly_name: Grill_Stepper
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+ota:
+
+mqtt:
+  broker: !secret mqtt_broker
+
+
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+number:
+  - platform: template
+    id: stepper_target
+    name: Stepper Control
+    min_value: -10000
+    max_value: 10000 # 2048
+    initial_value: 0
+    step: 1
+    set_action:
+      then:
+        - stepper.set_target:
+            id: my_stepper
+            target: !lambda 'return ((1900/100 * x) - 1900); ESP_LOGD("info", "The value of sensor is: %f", x);'
+
+button:
+  - platform: template
+    name: reset grill stepper position
+    id: grill_stepper_reset
+
+    # Optional variables:
+    icon: "mdi:emoticon-outline"
+    on_press:
+       lambda: |- 
+        id(my_stepper).report_position(0);
+        id(my_stepper).set_target(0);
+
+  - platform: template
+    name: "PID Climate Autotune"
+    on_press:
+      - climate.pid.autotune: pid_grill
+
+sensor:
+  - platform: mqtt_subscribe
+    name: "grill_temp"
+    id: grill_temp
+    topic: grilltemperature/grillprobe/outsideprobe
+
+stepper:
+  - platform: uln2003
+    id: my_stepper
+    pin_a: GPIO19
+    pin_b: GPIO18
+    pin_c: GPIO5
+    pin_d: GPIO17
+    max_speed: 250 steps/s
+    sleep_when_done: true 
+
+    # Optional:
+    acceleration: inf
+    deceleration: inf
+
+# Example configuration entry
+output:
+  - platform: template
+    id: stepper_output
+    type: float
+    min_power: 0  
+    max_power: 1
+    write_action:
+      lambda: |- 
+        id(my_stepper).set_target((1900 * state) - 1900);
+        ESP_LOGD("info", "The value of sensor is: %f", state);
+
+
+climate:
+  - platform: pid
+    id: pid_grill
+    name: "PID Climate Controller"
+    sensor: grill_temp
+    default_target_temperature: 21°C
+    target_temperature_command_topic: "grill_alarmtemp_outside"
+    heat_output: stepper_output
+    control_parameters:
+      kp: 0.15279
+      ki: 0.00210
+      kd: 2.78179
+      # kp: 0
+      # ki: 0
+      # kd: 0
+      output_averaging_samples: 5      # smooth the output over 5 samples
+      derivative_averaging_samples: 5  # smooth the derivative value over 10 samples
+    deadband_parameters:
+      threshold_high: 2°C
+      threshold_low: -2°C
+      kp_multiplier: 0.0   # proportional gain turned off inside deadband
+      ki_multiplier: 0.05  # integral accumulates at only 5% of normal ki
+      kd_multiplier: 0.0   # derviative is turned off inside deadband
+      deadband_output_averaging_samples: 15   # average the output over 15 samples within the deadband
