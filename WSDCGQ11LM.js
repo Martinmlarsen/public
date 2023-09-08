@@ -44,8 +44,7 @@ let xiaomi_temperature2 = {
             if (!Number.isFinite(humidity_calibration)) {
                 humidity_calibration = 0.0;
             }
-            // meta.logger.error("Humidity calibration " + humidity_calibration)
-
+            
             if (!Number.isFinite(temperature_calibration)) {
                 temperature_calibration = 0.0;
             }
